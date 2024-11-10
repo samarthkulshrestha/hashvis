@@ -5,7 +5,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#define WIDTH 400
+#define WIDTH 800
 #define HEIGHT WIDTH
 
 typedef struct {
@@ -30,6 +30,12 @@ Color gray_gradient(float x, float y) {
     return (Color) {x, x, x};
 }
 
+Color color_gradient(float x, float y) {
+    if (x * y >= 0) return (Color){x, y, 1};
+    float r = fmodf(x, y);
+    return (Color){r, r, r};
+}
+
 void render_pixels(Color (*f)(float x, float y)) {
     for (size_t y = 0; y < HEIGHT; ++y) {
         float ny = (float)y / HEIGHT * 2.0f - 1;
@@ -47,11 +53,13 @@ void render_pixels(Color (*f)(float x, float y)) {
 }
 
 int main(void) {
-    render_pixels(gray_gradient);
+    // render_pixels(gray_gradient);
+    render_pixels(color_gradient);
     const char *output_path = "output.png";
     if (!stbi_write_png(output_path, WIDTH, HEIGHT, 4, pixels, WIDTH * sizeof(RGBA32))) {
         nob_log(ERROR, "could not save image: %s", output_path);
         return 1;
     };
+    nob_log(INFO, "generated: %s", output_path);
     return 0;
 }
