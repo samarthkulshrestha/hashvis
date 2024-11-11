@@ -280,17 +280,6 @@ typedef struct {
     float r, g, b;
 } Color;
 
-Color gray_gradient(float x, float y) {
-    UNUSED(y);
-    return (Color) {x, x, x};
-}
-
-Color color_gradient(float x, float y) {
-    if (x * y >= 0) return (Color){x, y, 1};
-    float r = fmodf(x, y);
-    return (Color){r, r, r};
-}
-
 bool expect_number(Node *expr) {
     if (expr->kind != NK_NUMBER) {
         nob_log(ERROR, "%s:%d: expected a number.", expr->file_path, expr->line);
