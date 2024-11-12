@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #include "nob.h"
@@ -31,7 +32,31 @@ typedef enum {
 
     NK_TRIPLE,
     NK_IF,
+
+    NK_RULE,
+    NK_RANDOM,
+
+    COUNT_NK,
 } Node_Kind;
+
+static_assert(COUNT_NK == 15, "number of nodes have changed.");
+const char *nk_names[COUNT_NK] = {
+    [NK_X] = "x",
+    [NK_Y] = "y",
+    [NK_NUMBER] = "number",
+    [NK_ADD] = "add",
+    [NK_MULT] = "mult",
+    [NK_MOD] = "mod",
+    [NK_BOOLEAN] = "boolean",
+    [NK_GT] = "gt",
+    [NK_LT] = "lt",
+    [NK_GTEQ] = "gteq",
+    [NK_LTEQ] = "lteq",
+    [NK_TRIPLE] = "triple",
+    [NK_IF] = "if",
+    [NK_RULE] = "rule",
+    [NK_RANDOM] = "random",
+};
 
 typedef struct Node Node;
 
@@ -58,7 +83,25 @@ typedef union {
     Node_Binop binop;
     Node_Triple triple;
     Node_If iff;
+    int rule;
 } Node_As;
+
+typedef struct {
+    Node *node;
+    float probability;
+} Grammar_Branch;
+
+typedef struct {
+    Grammar_Branch *items;
+    size_t capacity;
+    size_t count;
+} Grammar_Branches;
+
+typedef struct {
+    Grammar_Branches *items;
+    size_t capacity;
+    size_t count;
+} Grammar;
 
 struct Node {
     Node_Kind kind;
@@ -85,6 +128,7 @@ Node *node_number_loc(const char *file_path, int line, float number) {
 
 #define node_x() node_loc(__FILE__, __LINE__, NK_X)
 #define node_y() node_loc(__FILE__, __LINE__, NK_Y)
+#define node_random() node_loc(__FILE__, __LINE__, NK_RANDOM)
 
 Node *node_add_loc(const char *file_path, int line, Node *lhs, Node *rhs) {
     Node *node = node_loc(file_path, line, NK_ADD);
@@ -164,6 +208,14 @@ Node *node_triple_loc(const char *file_path, int line, Node *first, Node *second
     node->as.triple.third = third;
     return node;
 }
+
+Node *node_rule_loc(const char *file_path, int line, int rule) {
+    Node *node = node_loc(file_path, line, NK_RULE);
+    node->as.rule = rule;
+    return node;
+}
+
+#define node_rule(rule) node_rule_loc(__FILE__, __LINE__, rule)
 
 #define node_triple(first, second, third) node_triple_loc(__FILE__, __LINE__, first, second, third)
 
@@ -257,6 +309,13 @@ void node_print(Node *node) {
             printf(" else ");
             node_print(node->as.iff.elze);
             break;
+        case NK_RULE:
+            printf("rule(%d)", node->as.rule);
+            break;
+        case NK_RANDOM:
+            printf("random");
+            break;
+        case COUNT_NK:
         default: UNREACHABLE("node_print");
     }
 }
@@ -310,6 +369,11 @@ Node *eval(Node *expr, float x, float y) {
         case NK_Y:      return node_number_loc(expr->file_path, expr->line, y);
         case NK_BOOLEAN:
         case NK_NUMBER: return expr;
+        case NK_RANDOM:
+        case NK_RULE: {
+            nob_log(ERROR, "%s:%d: cannot evaluate a grammar-only node.", expr->file_path, expr->line);
+            return NULL;
+        }
         case NK_ADD: {
             Node *lhs = eval(expr->as.binop.lhs, x, y);
             if (!lhs) return NULL;
@@ -394,6 +458,7 @@ Node *eval(Node *expr, float x, float y) {
             // if (!expect_boolean(elze)) return NULL;
             return cond->as.boolean ? then : elze;
         }
+        case COUNT_NK:
         default:
             UNREACHABLE("eval()");
     }
@@ -431,19 +496,77 @@ bool render_pixels(Node *f) {
     return true;
 }
 
+void grammar_print(Grammar grammar) {
+    for (size_t i = 0; i < grammar.count; ++i) {
+        printf("%zu ::= ", i);
+        Grammar_Branches *branches = &grammar.items[i];
+        for (size_t j = 0; j < branches->count; ++j) {
+            if (j > 0) printf(" | ");
+            node_print(branches->items[j].node);
+        }
+        printf("\n");
+    }
+}
+
 int main(void) {
-    // bool ok = render_pixels(node_triple( node_x(), node_y(), node_y()));
-    bool ok = render_pixels(
-        node_if(
-            node_gteq(node_mult(node_x(), node_y()), node_number(0)),
-            node_triple(
-                node_x(),
-                node_y(),
-                node_number(1)),
-            node_triple(
-                node_mod(node_x(), node_y()),
-                node_mod(node_x(), node_y()),
-                node_mod(node_x(), node_y()))));
+    Grammar grammar = {0};
+    Grammar_Branches branches = {0};
+    int e = 0;
+    int a = 1;
+    int c = 2;
+
+    arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
+        .node = node_triple(node_rule(c), node_rule(c), node_rule(c)),
+        .probability = 1.0f,
+    }));
+    arena_da_append(&node_arena, &grammar, branches);
+    memset(&branches, 0, sizeof(branches));
+
+    arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
+        .node = node_random(),
+        .probability = 1.0f/3.0f,
+    }));
+    arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
+        .node = node_x(),
+        .probability = 1.0f/3.0f,
+    }));
+    arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
+        .node = node_y(),
+        .probability = 1.0f/3.0f,
+    }));
+    arena_da_append(&node_arena, &grammar, branches);
+    memset(&branches, 0, sizeof(branches));
+
+    arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
+        .node = node_rule(a),
+        .probability = 1.0f/4.0f,
+    }));
+    arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
+        .node = node_add(node_rule(c), node_rule(c)),
+        .probability = 3.0f/8.0f,
+    }));
+    arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
+        .node = node_mult(node_rule(c), node_rule(c)),
+        .probability = 3.0f/8.0f,
+    }));
+    arena_da_append(&node_arena, &grammar, branches);
+    memset(&branches, 0, sizeof(branches));
+
+    grammar_print(grammar);
+    exit(0);
+
+    bool ok = render_pixels(node_triple( node_x(), node_y(), node_y()));
+    // bool ok = render_pixels(
+    //     node_if(
+    //         node_gteq(node_mult(node_x(), node_y()), node_number(0)),
+    //         node_triple(
+    //             node_x(),
+    //             node_y(),
+    //             node_number(1)),
+    //         node_triple(
+    //             node_mod(node_x(), node_y()),
+    //             node_mod(node_x(), node_y()),
+    //             node_mod(node_x(), node_y()))));
     if (!ok) return 1;
 
     const char *output_path = "output.png";
