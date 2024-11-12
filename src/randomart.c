@@ -1,7 +1,11 @@
+#include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <time.h>
 #define NOB_IMPLEMENTATION
 #define NOB_STRIP_PREFIX
 #include "nob.h"
@@ -18,13 +22,15 @@ static Arena node_arena = {0};
 typedef enum {
     NK_X,
     NK_Y,
+    NK_RANDOM,
 
+    NK_RULE,
     NK_NUMBER,
+    NK_BOOLEAN,
+
     NK_ADD,
     NK_MULT,
     NK_MOD,
-
-    NK_BOOLEAN,
     NK_GT,
     NK_LT,
     NK_GTEQ,
@@ -32,9 +38,6 @@ typedef enum {
 
     NK_TRIPLE,
     NK_IF,
-
-    NK_RULE,
-    NK_RANDOM,
 
     COUNT_NK,
 } Node_Kind;
@@ -118,6 +121,13 @@ Node *node_loc(const char *file_path, int line, Node_Kind kind) {
     return node;
 }
 
+Node *node_binop_loc(const char *file_path, int line, Node_Kind kind, Node *lhs, Node *rhs) {
+    Node *node = node_loc(file_path, line, kind);
+    node->as.binop.lhs = lhs;
+    node->as.binop.rhs = rhs;
+    return node;
+}
+
 Node *node_number_loc(const char *file_path, int line, float number) {
     Node *node = node_loc(file_path, line, NK_NUMBER);
     node->as.number = number;
@@ -130,32 +140,13 @@ Node *node_number_loc(const char *file_path, int line, float number) {
 #define node_y() node_loc(__FILE__, __LINE__, NK_Y)
 #define node_random() node_loc(__FILE__, __LINE__, NK_RANDOM)
 
-Node *node_add_loc(const char *file_path, int line, Node *lhs, Node *rhs) {
-    Node *node = node_loc(file_path, line, NK_ADD);
-    node->as.binop.lhs = lhs;
-    node->as.binop.rhs = rhs;
-    return node;
-}
-
-#define node_add(lhs, rhs) node_add_loc(__FILE__, __LINE__, lhs, rhs)
-
-Node *node_mult_loc(const char *file_path, int line, Node *lhs, Node *rhs) {
-    Node *node = node_loc(file_path, line, NK_MULT);
-    node->as.binop.lhs = lhs;
-    node->as.binop.rhs = rhs;
-    return node;
-}
-
-#define node_mult(lhs, rhs) node_mult_loc(__FILE__, __LINE__, lhs, rhs)
-
-Node *node_mod_loc(const char *file_path, int line, Node *lhs, Node *rhs) {
-    Node *node = node_loc(file_path, line, NK_MOD);
-    node->as.binop.lhs = lhs;
-    node->as.binop.rhs = rhs;
-    return node;
-}
-
-#define node_mod(lhs, rhs) node_mod_loc(__FILE__, __LINE__, lhs, rhs)
+#define node_add(lhs, rhs) node_binop_loc(__FILE__, __LINE__, NK_ADD, lhs, rhs)
+#define node_mult(lhs, rhs) node_binop_loc(__FILE__, __LINE__, NK_MULT, lhs, rhs)
+#define node_mod(lhs, rhs) node_binop_loc(__FILE__, __LINE__, NK_MOD, lhs, rhs)
+#define node_gt(lhs, rhs) node_binop_loc(__FILE__, __LINE__, NK_GT, lhs, rhs)
+#define node_lt(lhs, rhs) node_binop_loc(__FILE__, __LINE__, NK_LT, lhs, rhs)
+#define node_gteq(lhs, rhs) node_binop_loc(__FILE__, __LINE__, NK_GTEQ, lhs, rhs)
+#define node_lteq(lhs, rhs) node_binop_loc(__FILE__, __LINE__, NK_LTEQ, lhs, rhs)
 
 Node *node_boolean_loc(const char *file_path, int line, bool boolean) {
     Node *node = node_loc(file_path, line, NK_BOOLEAN);
@@ -164,42 +155,6 @@ Node *node_boolean_loc(const char *file_path, int line, bool boolean) {
 }
 
 #define node_boolean(boolean) node_boolean_loc(__FILE__, __LINE__, boolean)
-
-Node *node_gt_loc(const char *file_path, int line, Node *lhs, Node *rhs) {
-    Node *node = node_loc(file_path, line, NK_GT);
-    node->as.binop.lhs = lhs;
-    node->as.binop.rhs = rhs;
-    return node;
-}
-
-#define node_gt(lhs, rhs) node_gt_loc(__FILE__, __LINE__, lhs, rhs)
-
-Node *node_lt_loc(const char *file_path, int line, Node *lhs, Node *rhs) {
-    Node *node = node_loc(file_path, line, NK_LT);
-    node->as.binop.lhs = lhs;
-    node->as.binop.rhs = rhs;
-    return node;
-}
-
-#define node_lt(lhs, rhs) node_lt_loc(__FILE__, __LINE__, lhs, rhs)
-
-Node *node_gteq_loc(const char *file_path, int line, Node *lhs, Node *rhs) {
-    Node *node = node_loc(file_path, line, NK_GTEQ);
-    node->as.binop.lhs = lhs;
-    node->as.binop.rhs = rhs;
-    return node;
-}
-
-#define node_gteq(lhs, rhs) node_gteq_loc(__FILE__, __LINE__, lhs, rhs)
-
-Node *node_lteq_loc(const char *file_path, int line, Node *lhs, Node *rhs) {
-    Node *node = node_loc(file_path, line, NK_LTEQ);
-    node->as.binop.lhs = lhs;
-    node->as.binop.rhs = rhs;
-    return node;
-}
-
-#define node_lteq(lhs, rhs) node_lteq_loc(__FILE__, __LINE__, lhs, rhs)
 
 Node *node_triple_loc(const char *file_path, int line, Node *first, Node *second, Node *third) {
     Node *node = node_loc(file_path, line, NK_TRIPLE);
@@ -503,12 +458,102 @@ void grammar_print(Grammar grammar) {
         for (size_t j = 0; j < branches->count; ++j) {
             if (j > 0) printf(" | ");
             node_print(branches->items[j].node);
+            printf(" [%.02f]", branches->items[j].probability);
         }
         printf("\n");
     }
 }
 
+float rand_float(void) {
+    return (float)rand()/RAND_MAX;
+}
+
+Node *gen_rule(Grammar grammar, size_t rule, int depth);
+
+Node *gen_node(Grammar grammar, Node *node, int depth) {
+    switch (node->kind) {
+        case NK_X:
+        case NK_Y:
+        case NK_NUMBER:
+        case NK_BOOLEAN:
+            return node;
+
+        case NK_ADD:
+        case NK_MULT:
+        case NK_MOD:
+        case NK_GT:
+        case NK_LT:
+        case NK_GTEQ:
+        case NK_LTEQ: {
+            Node *lhs = gen_node(grammar, node->as.binop.lhs, depth);
+            if (!lhs) return NULL;
+            Node *rhs = gen_node(grammar, node->as.binop.rhs, depth);
+            if (!rhs) return NULL;
+            return node_binop_loc(node->file_path, node->line, node->kind, lhs, rhs);
+        }
+
+        case NK_TRIPLE: {
+            Node *first = gen_node(grammar, node->as.triple.first, depth);
+            if (!first) return NULL;
+            Node *second = gen_node(grammar, node->as.triple.second, depth);
+            if (!second) return NULL;
+            Node *third = gen_node(grammar, node->as.triple.third, depth);
+            if (!third) return NULL;
+            return node_triple_loc(node->file_path, node->line, first, second, third);
+        }
+        case NK_IF: {
+            Node *cond = gen_node(grammar, node->as.iff.cond, depth);
+            if (!cond) return NULL;
+            Node *then = gen_node(grammar, node->as.iff.then, depth);
+            if (!then) return NULL;
+            Node *elze = gen_node(grammar, node->as.iff.elze, depth);
+            if (!elze) return NULL;
+            return node_if_loc(node->file_path, node->line, cond, then, elze);
+            break;
+        }
+
+        case NK_RULE: {
+            return gen_rule(grammar, node->as.rule, depth - 1);
+        }
+        case NK_RANDOM: {
+            return node_number_loc(node->file_path, node->line, rand_float() * 2.0f - 1.0f);
+        }
+
+        case COUNT_NK:
+        default:
+            UNREACHABLE("gen_node()");
+    }
+}
+
+#define GEN_RULE_MAX_ATTEMPTS 10
+
+Node *gen_rule(Grammar grammar, size_t rule, int depth) {
+    if (depth <= 0) return NULL;
+
+    assert(rule < grammar.count);
+
+    Grammar_Branches *branches = &grammar.items[rule];
+    assert(branches->count > 0);
+
+    Node *node = NULL;
+    for (size_t attempts = 0; node == NULL && attempts < GEN_RULE_MAX_ATTEMPTS; ++attempts) {
+        float p = rand_float();
+        float t = 0.0f;
+        for (size_t i = 0; i < branches->count; ++i) {
+            t += branches->items[i].probability;
+            if (t >= p) {
+                node = gen_node(grammar, branches->items[i].node, depth - 1);
+                break;
+            }
+        }
+    };
+    return node;
+}
+
+
 int main(void) {
+    srand(time(0));
+
     Grammar grammar = {0};
     Grammar_Branches branches = {0};
     int e = 0;
@@ -540,22 +585,29 @@ int main(void) {
     arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
         .node = node_rule(a),
         .probability = 1.0f/4.0f,
+        // .probability = 1.0f/2.0f,
     }));
     arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
         .node = node_add(node_rule(c), node_rule(c)),
         .probability = 3.0f/8.0f,
+        // .probability = 1.0f/4.0f,
     }));
     arena_da_append(&node_arena, &branches, ((Grammar_Branch) {
         .node = node_mult(node_rule(c), node_rule(c)),
         .probability = 3.0f/8.0f,
+        // .probability = 1.0f/4.0f,
     }));
     arena_da_append(&node_arena, &grammar, branches);
     memset(&branches, 0, sizeof(branches));
 
-    grammar_print(grammar);
-    exit(0);
+    Node *f = gen_rule(grammar, e, 20);
+    if (!f) {
+        nob_log(ERROR, "the generation process could not terminate.");
+        return 1;
+    }
+    node_print_ln(f);
 
-    bool ok = render_pixels(node_triple( node_x(), node_y(), node_y()));
+    // bool ok = render_pixels(node_triple( node_x(), node_y(), node_y()));
     // bool ok = render_pixels(
     //     node_if(
     //         node_gteq(node_mult(node_x(), node_y()), node_number(0)),
@@ -567,6 +619,8 @@ int main(void) {
     //             node_mod(node_x(), node_y()),
     //             node_mod(node_x(), node_y()),
     //             node_mod(node_x(), node_y()))));
+
+    bool ok = render_pixels(f);
     if (!ok) return 1;
 
     const char *output_path = "output.png";
