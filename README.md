@@ -59,8 +59,8 @@ function is also interesting to play around with.
 
 ## references
 
-+ Perrig, A. and Song, D. (1999) 'Hash Visualization: a New Technique
-to improve Real-World Security' [link](https://netsec.ethz.ch/publications/papers/validation.pdf)
++ Perrig, A. and Song, D. (1999)
+['Hash Visualization: a New Technique to improve Real-World Security'](https://netsec.ethz.ch/publications/papers/validation.pdf)
 
 ## contribute
 
