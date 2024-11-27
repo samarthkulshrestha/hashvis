@@ -8,7 +8,7 @@ samarth kulshrestha
 ![license](https://img.shields.io/github/license/samarthkulshrestha/hashvis?color=%23f2e85a&style=for-the-badge)
 ![repo size](https://img.shields.io/github/repo-size/samarthkulshrestha/hashvis?color=%2346d4a0&style=for-the-badge)
 <br/><br/><br/>
-![hashvis logo](demos/02_color_gradient.png)
+![hashvis logo](demos/color_gradient_logo.png)
 <br/><br>
 </div>
 
